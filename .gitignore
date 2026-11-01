@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+!.env.production.example
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+node_modules/
+frontend/dist/
+models/
+*.onnx
+*.bin
+*.log
+.DS_Store

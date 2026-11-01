@@ -1,0 +1,14 @@
+{
+  "sentiment": {
+    "repo": "m3hrdadfi/albert-fa-base-v2-sentiment-multi",
+    "revision": "main",
+    "expected_labels": ["Negative", "Neutral", "Positive"],
+    "max_tokens": 256
+  },
+  "topics": {
+    "repo": "m3hrdadfi/albert-fa-base-v2-clf-persiannews",
+    "revision": "main",
+    "expected_labels": ["اجتماعی", "اقتصادی", "بین الملل", "سیاسی", "علمی فناوری", "فرهنگی هنری", "ورزشی", "پزشکی"],
+    "max_tokens": 256
+  }
+}

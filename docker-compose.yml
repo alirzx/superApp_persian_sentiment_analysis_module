@@ -1,0 +1,104 @@
+name: superapp-persian-nlp
+x-build-args: &build-args
+  PIP_PRIMARY_INDEX_URL: ${PIP_PRIMARY_INDEX_URL:-https://package-mirror.liara.ir/repository/pypi/simple}
+  PIP_FALLBACK_INDEX_URL: ${PIP_FALLBACK_INDEX_URL:-https://mirror2.chabokan.net/pypi/simple/}
+services:
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args: *build-args
+    image: superapp-persian-nlp-api:local
+    init: true
+    restart: unless-stopped
+    read_only: true
+    user: app
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      API_TOKEN: ${API_TOKEN:-}
+      MODEL_DIR: /models
+      MODELS_CONFIG: /app/models.json
+      CPU_THREADS: ${CPU_THREADS:-2}
+      OMP_NUM_THREADS: ${CPU_THREADS:-2}
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+      MAX_CONCURRENT_INFERENCE: ${MAX_CONCURRENT_INFERENCE:-1}
+      MAX_QUEUE_WAIT_SECONDS: ${MAX_QUEUE_WAIT_SECONDS:-10}
+      MAX_TEXT_CHARS: ${MAX_TEXT_CHARS:-5000}
+      MAX_BATCH_ITEMS: ${MAX_BATCH_ITEMS:-16}
+      MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-65536}
+      ENABLE_METRICS: ${ENABLE_METRICS:-true}
+    volumes:
+      - model_cache:/models:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=32m
+    ports:
+      - "${API_BIND_IP:-127.0.0.1}:${API_PORT:-8001}:8000"
+    cpus: ${API_CPUS:-2.0}
+    mem_limit: ${API_MEMORY:-1200m}
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      start_period: 120s
+      interval: 20s
+      timeout: 8s
+      retries: 3
+  ui:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    image: superapp-persian-nlp-ui:local
+    init: true
+    restart: unless-stopped
+    environment:
+      API_TOKEN: ${API_TOKEN:-}
+      APP_ENV: ${APP_ENV:-development}
+    ports:
+      - "${UI_BIND_IP:-127.0.0.1}:${UI_PORT:-8082}:8080"
+    depends_on:
+      api: {condition: service_healthy}
+    networks: [internal]
+    read_only: true
+    tmpfs:
+      - /etc/nginx/conf.d:rw,size=1m,uid=101,gid=101,mode=0755
+      - /var/cache/nginx:rw,size=16m
+      - /var/run:rw,size=4m
+      - /tmp:rw,size=8m
+    cpus: ${UI_CPUS:-0.5}
+    mem_limit: ${UI_MEMORY:-256m}
+    pids_limit: 64
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+  model-setup:
+    profiles: [setup]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.setup
+      args: *build-args
+    image: superapp-persian-nlp-model-setup:local
+    network_mode: bridge
+    environment:
+      MODEL_DIR: /models
+      MODELS_CONFIG: /app/models.json
+      MODEL_SENTIMENT_REVISION: ${MODEL_SENTIMENT_REVISION:-main}
+      MODEL_TOPICS_REVISION: ${MODEL_TOPICS_REVISION:-main}
+      HF_HOME: /models/.hf-hub
+      OMP_NUM_THREADS: '2'
+    volumes:
+      - model_cache:/models
+    cpus: ${SETUP_CPUS:-3.0}
+    mem_limit: ${SETUP_MEMORY:-4g}
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  model_cache:
+networks:
+  internal:
+    driver: bridge
