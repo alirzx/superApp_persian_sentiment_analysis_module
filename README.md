@@ -26,9 +26,10 @@ make ps
 make health
 ```
 
-- UI: `http://127.0.0.1:8082`
-- API: `http://127.0.0.1:8001`
+- Local UI (`.env.example`): `http://127.0.0.1:8082`
+- Local API (`.env.example`): `http://127.0.0.1:8001`
 - Development OpenAPI: `http://127.0.0.1:8001/docs`
+- Production host ports (`.env.production.example`): `127.0.0.1:8002` (API), `127.0.0.1:8083` (UI). These are loopback endpoints, not public URLs.
 - API inside Compose network: `http://api:8000`
 - HTTP API is bound to loopback by default. Do not open ports on the public Internet without authenticated TLS ingress and rate limits.
 - No inference runtime network access. Artifacts live on persistent Docker volume `superapp-persian-nlp_model_cache` and survive `docker compose down`; **do not use `down -v`** unless deliberately deleting the models.
@@ -92,4 +93,4 @@ This source has been validated with unit tests using a fake inference engine. **
 - Build and run model-setup first, then start only API and UI. Start with one worker, 2 CPU threads, 1 simultaneous inference, 1.2 GB API memory cap (UNVERIFIED capacity starting point), then benchmark P50/P95 and peak RSS.
 - Model licenses on Hugging Face say Apache-2.0; commercial release requires review of weights, training data, and third-party licenses.
 
-See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/API.md`](docs/API.md), [`docs/MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
+See [`docs/ENV_CONFIGURATION.md`](docs/ENV_CONFIGURATION.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/API.md`](docs/API.md), [`docs/MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).

@@ -5,7 +5,13 @@ ARG PIP_FALLBACK_INDEX_URL=https://mirror2.chabokan.net/pypi/simple/
 WORKDIR /app
 COPY backend/requirements.txt backend/requirements-setup.txt /tmp/
 # PyTorch CPU is used ONLY in this one-shot builder, never in the long-running API.
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch==2.5.1 && \
+# Resolve the +cpu wheel from PyTorch and ordinary dependencies from an explicit
+# package mirror. Using the PyTorch-only index as the sole index caused DNS failures
+# for transitive packages (e.g. filelock on files.pythonhosted.org).
+RUN (pip install --index-url "$PIP_PRIMARY_INDEX_URL" \
+     --extra-index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1+cpu' || \
+     pip install --index-url "$PIP_FALLBACK_INDEX_URL" \
+     --extra-index-url https://download.pytorch.org/whl/cpu 'torch==2.5.1+cpu') && \
     (pip install --index-url "$PIP_PRIMARY_INDEX_URL" -r /tmp/requirements-setup.txt || \
      pip install --index-url "$PIP_FALLBACK_INDEX_URL" -r /tmp/requirements-setup.txt)
 COPY backend/app /app/app

@@ -4,7 +4,7 @@ stages: [validate, test, build, deploy]
 variables:
   PIP_PRIMARY_INDEX_URL: "https://package-mirror.liara.ir/repository/pypi/simple"
   PIP_FALLBACK_INDEX_URL: "https://mirror2.chabokan.net/pypi/simple/"
-  DEPLOY_DIR: "/opt/apps/ai-service/persian-nlp"
+  DEPLOY_DIR: "/opt/apps/ai-service/persian_sentiment_topic_analysis_module"
   RUN_SERVICES: "0"  # server start is opt-in after RAM validation and verified ONNX export
 .default-shell: &default-shell
   tags: [linux, bina, shell]
@@ -77,11 +77,12 @@ deploy:
   script:
     - |
       set -eu
-      TARGET="${DEPLOY_DIR:-/opt/apps/ai-service/persian-nlp}"
+      TARGET="${DEPLOY_DIR:-/opt/apps/ai-service/persian_sentiment_topic_analysis_module}"
       case "$TARGET" in *[!A-Za-z0-9_./-]*|'') echo 'Unsafe DEPLOY_DIR'; exit 1 ;; esac
       REMOTE="${SSH_USER}@${VM_IPADDRESS}"
       ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "test -d '$TARGET/.git'"
       scp -P "$SSH_PORT" -o BatchMode=yes "$ENV_FILE" "$REMOTE:$TARGET/.env"
+      ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "chmod 600 '$TARGET/.env'"
       ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "set -eu; cd '$TARGET'; git checkout master; git fetch origin master; git merge --ff-only origin/master; docker compose config --quiet; docker compose build api ui"
       if [ "${RUN_SERVICES:-0}" = "1" ]; then
         ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "set -eu; cd '$TARGET'; docker compose --profile setup build model-setup; docker compose --profile setup run --rm --no-deps model-setup; docker compose --profile setup run --rm --no-deps model-setup python -m scripts.prepare_models --verify-only; docker compose up -d --no-build --wait --wait-timeout 180 api ui"
