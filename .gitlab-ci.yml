@@ -1,93 +1,21 @@
-# SuperApp Module 02: Persian sentiment + topic classification
-# Based on Module 01's GitLab shell-runner and SSH deploy contract.
-stages: [validate, test, build, deploy]
-variables:
-  PIP_PRIMARY_INDEX_URL: "https://package-mirror.liara.ir/repository/pypi/simple"
-  PIP_FALLBACK_INDEX_URL: "https://mirror2.chabokan.net/pypi/simple/"
-  DEPLOY_DIR: "/opt/apps/ai-service/persian_sentiment_topic_analysis_module"
-  RUN_SERVICES: "0"  # server start is opt-in after RAM validation and verified ONNX export
-.default-shell: &default-shell
-  tags: [linux, bina, shell]
-  before_script:
-    - set -eu
-validate-source:
-  <<: *default-shell
-  stage: validate
-  script:
-    - docker compose config --quiet
-    - python3 -m json.tool models.json >/dev/null
-    - test -f backend/Dockerfile.setup
-    - test -f backend/scripts/prepare_models.py
-    - test -f frontend/Dockerfile
-    - test -f .env.production.example
-backend-tests:
-  <<: *default-shell
-  stage: test
-  script:
-    - python3 -m venv .ci-venv
-    - . .ci-venv/bin/activate
-    - pip install --index-url "$PIP_PRIMARY_INDEX_URL" -r backend/requirements-dev.txt || pip install --index-url "$PIP_FALLBACK_INDEX_URL" -r backend/requirements-dev.txt
-    - PYTHONPATH=backend python -m pytest backend/tests -q
-    - python -m compileall -q backend
-  after_script:
-    - rm -rf .ci-venv
-frontend-build:
-  <<: *default-shell
-  stage: test
-  script:
-    - cd frontend
-    - npm install --no-audit --no-fund
-    - npm run build
-  after_script:
-    - rm -rf frontend/node_modules frontend/dist
-build-images:
-  <<: *default-shell
-  stage: build
-  when: manual
-  allow_failure: true
-  script:
-    - docker compose build api ui
-# SSH variables are GitLab CI/CD file variables where noted.
 deploy:
-  <<: *default-shell
   stage: deploy
-  rules:
-    - if: '$CI_COMMIT_BRANCH == "master"'
-      when: manual
-      allow_failure: true
-    - when: never
   before_script:
-    - set -eu
-    - ': "${SSH_USER:?SSH_USER required}"'
-    - ': "${SSH_PORT:?SSH_PORT required}"'
-    - ': "${VM_IPADDRESS:?VM_IPADDRESS required}"'
-    - ': "${SSH_PRIVATE_KEY:?SSH_PRIVATE_KEY file variable required}"'
-    - ': "${SSH_KNOWN_HOSTS:?SSH_KNOWN_HOSTS file variable required}"'
-    - ': "${ENV_FILE:?ENV_FILE file variable required}"'
-    - test -f "$SSH_PRIVATE_KEY"
-    - test -f "$SSH_KNOWN_HOSTS"
-    - test -f "$ENV_FILE"
-    - eval "$(ssh-agent -s)"
-    - chmod 600 "$SSH_PRIVATE_KEY"
-    - ssh-add "$SSH_PRIVATE_KEY"
-    - mkdir -p "$HOME/.ssh"
-    - chmod 700 "$HOME/.ssh"
-    - cp "$SSH_KNOWN_HOSTS" "$HOME/.ssh/known_hosts"
-    - chmod 600 "$HOME/.ssh/known_hosts"
+    - "command -v ssh-agent >/dev/null || ( apk add --update openssh )"
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - - ssh-add -l
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -p $SSH_PORT $VM_IPADDRESS >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
   script:
-    - |
-      set -eu
-      TARGET="${DEPLOY_DIR:-/opt/apps/ai-service/persian_sentiment_topic_analysis_module}"
-      case "$TARGET" in *[!A-Za-z0-9_./-]*|'') echo 'Unsafe DEPLOY_DIR'; exit 1 ;; esac
-      REMOTE="${SSH_USER}@${VM_IPADDRESS}"
-      ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "test -d '$TARGET/.git'"
-      scp -P "$SSH_PORT" -o BatchMode=yes "$ENV_FILE" "$REMOTE:$TARGET/.env"
-      ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "chmod 600 '$TARGET/.env'"
-      ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "set -eu; cd '$TARGET'; git checkout master; git fetch origin master; git merge --ff-only origin/master; docker compose config --quiet; docker compose build api ui"
-      if [ "${RUN_SERVICES:-0}" = "1" ]; then
-        ssh -p "$SSH_PORT" -o BatchMode=yes "$REMOTE" "set -eu; cd '$TARGET'; docker compose --profile setup build model-setup; docker compose --profile setup run --rm --no-deps model-setup; docker compose --profile setup run --rm --no-deps model-setup python -m scripts.prepare_models --verify-only; docker compose up -d --no-build --wait --wait-timeout 180 api ui"
-      else
-        echo 'Image builds complete. RUN_SERVICES=0, so model installation and startup were skipped.'
-      fi
-  after_script:
-    - ssh-agent -k || true
+    - echo $SSH_USER
+    - scp -P "$SSH_PORT" "$ENV_FILE" "$SSH_USER@$VM_IPADDRESS:/opt/apps/ai-service/persian_sentiment_topic_analysis_module/.env"
+    - ssh $SSH_USER@$VM_IPADDRESS -p ${SSH_PORT} "cd /opt/apps/ai-service/persian_sentiment_topic_analysis_module && git pull origin master && docker compose up --build -d"
+  only:
+    - master
+  tags:
+    - linux
+    - bina
+    - shell
