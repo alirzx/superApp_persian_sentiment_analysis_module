@@ -15,6 +15,7 @@ from pathlib import Path
 ALLOWED = {"config.json", "pytorch_model.bin", "spiece.model", "spiece.vocab",
            "special_tokens_map.json", "tokenizer_config.json", "added_tokens.json", "tokenizer.json"}
 REQUIRED = {"config.json", "pytorch_model.bin", "spiece.model"}
+REQUIRED_RUNTIME = {"model.onnx", "config.json", "spiece.model"}
 
 
 def digest(path: Path):
@@ -34,10 +35,14 @@ def check_installed(folder: Path, spec: dict) -> bool:
             return False
         if not (len(manifest["revision"]) == 40 and all(c in "0123456789abcdef" for c in manifest["revision"].lower())):
             return False
-        if "model.onnx" not in manifest["sha256"] or "config.json" not in manifest["sha256"]:
+        digests = manifest.get("sha256")
+        if not isinstance(digests, dict) or not REQUIRED_RUNTIME.issubset(digests):
             return False
-        for name, expected in manifest["sha256"].items():
-            if name not in ALLOWED | {"model.onnx"} or digest(folder / name) != expected:
+        for name, expected in digests.items():
+            if (name not in ALLOWED | {"model.onnx"}
+                    or not isinstance(expected, str) or len(expected) != 64
+                    or any(ch not in "0123456789abcdef" for ch in expected.lower())
+                    or not (folder / name).is_file() or digest(folder / name) != expected):
                 return False
         cfg = json.loads((folder / "config.json").read_text(encoding="utf-8"))
         labels = [cfg["id2label"][str(i)] for i in range(len(cfg["id2label"]))]
