@@ -28,6 +28,11 @@ services:
       MAX_BATCH_ITEMS: ${MAX_BATCH_ITEMS:-16}
       MAX_REQUEST_BYTES: ${MAX_REQUEST_BYTES:-65536}
       ENABLE_METRICS: ${ENABLE_METRICS:-true}
+    # The API must never boot against an empty or partially prepared model volume.
+    # The one-shot setup verifies cached manifests and exports models only if missing.
+    depends_on:
+      model-setup:
+        condition: service_completed_successfully
     volumes:
       - model_cache:/models:ro
     tmpfs:
@@ -76,7 +81,9 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
   model-setup:
-    profiles: [setup]
+    # Ordinary 'docker compose up --build -d' must prepare models before API/UI.
+    restart: "no"
+    init: true
     build:
       context: .
       dockerfile: backend/Dockerfile.setup
