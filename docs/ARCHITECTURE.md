@@ -6,7 +6,7 @@
 
 `ui`: React 18 + Vite TypeScript browser bundle served by Nginx on internal port 8080. Nginx strips `/api` prefix and inserts a server-side shared token for FastAPI. Browser bundles do not contain the token. Nginx reverse proxy **is not** identity authentication.
 
-`model-setup`: temporary Docker Compose profile `setup`; downloads original task-specific checkpoints, exports ONNX with torch in a separate image, validates ONNX against PyTorch numerically, writes immutable SHA manifest, and atomically installs to the named volume. `make model` skips installed verified artifacts. `make model-refresh` updates only when requested.
+`model-setup`: one-shot startup prerequisite of `api` (Compose `service_completed_successfully`); downloads original task-specific checkpoints, exports ONNX with torch in a separate image, validates ONNX against PyTorch numerically, writes immutable SHA manifest, and atomically installs to the named volume. `make model` skips installed verified artifacts. `make model-refresh` updates only when requested.
 
 ## Request paths
 
