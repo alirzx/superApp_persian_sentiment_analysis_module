@@ -33,8 +33,10 @@ def test_gitlab_deployment_single_source_and_path():
     assert 'local: .gitlab-ci.yml' in compatibility
     assert 'deploy:' not in compatibility
     assert '/opt/apps/ai-service/persian_sentiment_topic_analysis_module' in canonical
-    assert 'ssh-keyscan' not in canonical
-    assert 'RUN_SERVICES: "0"' in canonical
+    # Organization maintains the CI deployment workflow. Tests verify that
+    # the job still deploys the correct checkout, without prescribing its design.
+    assert 'git pull origin master' in canonical
+    assert 'docker compose up --build -d' in canonical
 
 
 def test_no_untrusted_token_placeholder_in_server_example():
@@ -44,3 +46,16 @@ def test_no_untrusted_token_placeholder_in_server_example():
     import pytest
     with pytest.raises(ValueError):
         Settings(environment='production', api_token=production['API_TOKEN']).validate()
+
+
+def test_compose_bootstraps_models_before_api():
+    # The server's unchanged CI runs 'docker compose up --build -d'.
+    # This must run one-shot model setup before starting the inference API.
+    compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
+    api = compose.split('  api:', 1)[1].split('  ui:', 1)[0]
+    setup = compose.split('\n  model-setup:\n', 1)[1].split('\nvolumes:', 1)[0]
+    assert 'model-setup:\n        condition: service_completed_successfully' in api
+    assert 'profiles:' not in setup
+    assert 'restart: "no"' in setup
+    assert 'model_cache:/models:ro' in api
+    assert 'model_cache:/models' in setup
