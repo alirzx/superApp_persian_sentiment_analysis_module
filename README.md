@@ -1,6 +1,6 @@
 # SuperApp · Persian Sentiment Analysis & Topic Classification
 
-Two independent Persian ALBERT classification models exposed through **one CPU-only FastAPI backend** and a separate **Persian RTL React/Nginx frontend**. Only **two long-running containers** (`api`, `ui`). The optional `model-setup` service is a **one-shot exporter/downloader**, never part of the steady-state deployment.
+Two independent Persian ALBERT classification models exposed through **one CPU-only FastAPI backend** and a separate **Persian RTL React/Nginx frontend**. Only **two long-running containers** (`api`, `ui`). The `model-setup` service is a **one-shot exporter/downloader**, not a long-running process. Normal `docker compose up --build -d` now requires it to finish successfully and verify both cached models before the API starts. Existing verified model artifacts are reused.
 
 ## Inference capabilities
 
