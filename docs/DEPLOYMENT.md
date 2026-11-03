@@ -14,7 +14,7 @@ make health
 docker compose logs --tail=100 api ui
 ```
 
-Model setup is **one-shot**. The API container has no `torch` and no Hub dependency. `make up` does not rebuild or download models. The persistent named model volume survives ordinary restarts or `docker compose down`. **Never run `docker compose down -v` on a production instance unless removing all cached models is intended.**
+Model setup is **one-shot**. The API container has no `torch` and no Hub dependency. The model-setup dependency now runs before the API on normal Compose startup. `make up` uses `--no-build`, so build the three images before using it; an already valid model cache is reused. The persistent named model volume survives ordinary restarts or `docker compose down`. **Never run `docker compose down -v` on a production instance unless removing all cached models is intended.**
 
 If model preparation fails during ONNX export, the installed artifact is not replaced. The setup image and original checkpoint need network for first setup; API inference requires no network.
 
@@ -55,3 +55,29 @@ Local `.env.example`: API `127.0.0.1:8001`, UI `127.0.0.1:8082`. Company server 
 - [ ] Batch/queue failure and 503 response behavior verified under load.
 - [ ] Public UI protected by authenticated TLS ingress, per-user quotas and abuse controls.
 - [ ] Signed/offline model artifact retention and rollback strategy approved.
+
+## Incident fix: missing model manifest
+
+If API startup fails with `/models/sentiment/manifest.json` missing, the
+shared `model_cache` volume was not successfully populated. An API image
+build never downloads the model weights by itself. On the company server,
+`docker compose up --build -d` now builds and runs the one-shot
+`model-setup` prerequisite before starting API. It verifies and reuses
+both existing model artifacts or downloads/exports missing ones.
+
+```bash
+# From the server checkout; keep the existing .env and project name.
+docker compose config --quiet
+docker compose config --format json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["name"]); print({k:d["services"][k].get("volumes") for k in ("api","model-setup")})'
+docker compose up --build -d
+docker compose ps -a
+docker compose logs --tail=150 model-setup api ui
+# Verify the two artifacts in the SAME persistent volume:
+docker compose run --rm --no-deps model-setup python -m scripts.prepare_models --verify-only
+```
+
+Do not create an empty placeholder manifest or delete the cache using
+`docker compose down -v`. The initial setup requires Hugging Face access,
+CPU PyTorch/ONNX export dependencies, temporary disk space and sufficient RAM.
+If setup cannot reach the model Hub, no application startup is attempted.
+The original GitLab CI script is deliberately unchanged by this incident fix.
