@@ -20,10 +20,21 @@ def sha256(path: Path) -> str:
 
 class Classifier:
     def __init__(self, path: Path, spec: dict, threads: int):
+        # Diagnose missing model artifacts before importing inference libraries.
+        manifest_path = path / "manifest.json"
+        if not manifest_path.is_file():
+            raise RuntimeError(
+                f"Prepared model artifact missing for task '{path.name}' at {manifest_path}. "
+                "Run 'docker compose up --build -d' to populate the persistent model "
+                "volume via model-setup, or 'docker compose run --rm --no-deps model-setup'."
+            )
         import onnxruntime as ort
         from transformers import AutoTokenizer
 
-        manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        required = {"model.onnx", "config.json", "spiece.model"}
+        if not isinstance(manifest.get("sha256"), dict) or not required.issubset(manifest["sha256"]):
+            raise RuntimeError(f"Incomplete prepared model for task '{path.name}'; regenerate with model-setup")
         if manifest["repo"] != spec["repo"] or manifest["format"] != "onnx-fp32":
             raise RuntimeError("Wrong model artifact")
         revision = manifest["revision"]
