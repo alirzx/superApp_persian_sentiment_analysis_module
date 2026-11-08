@@ -94,3 +94,10 @@ This source has been validated with unit tests using a fake inference engine. **
 - Model licenses on Hugging Face say Apache-2.0; commercial release requires review of weights, training data, and third-party licenses.
 
 See [`docs/ENV_CONFIGURATION.md`](docs/ENV_CONFIGURATION.md), [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md), [`docs/API.md`](docs/API.md), [`docs/MODEL_PROVENANCE.md`](docs/MODEL_PROVENANCE.md), [`docs/SECURITY.md`](docs/SECURITY.md), and [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md).
+
+
+### Build mirrors and LAN/VPN service access
+
+Python runtime and setup dependencies use Liara PyPI with Chabokan fallback (configurable pip retries/timeouts); only the CPU-specific torch wheel is downloaded from PyTorch's official CPU index. npm dependencies use Liara's npm registry, and Nginx's Alpine `gettext` uses Liara's Alpine repository. Hugging Face downloads of the original models still need network on first setup.
+
+For a **trusted LAN/VPN-only** deployment, set `UI_BIND_IP=0.0.0.0` and `UI_PORT=8083` in the private GitLab `ENV_FILE`, while leaving `API_BIND_IP=127.0.0.1` / `API_PORT=8002`. This permits connections on both the server LAN and VPN interface addresses (subject to routing/firewall). Restrict TCP 8083 to trusted clients and provide human authentication where needed. The browser uses relative `/api` calls via Nginx; no direct API exposure is needed. See `docs/ENV_CONFIGURATION.md` for the full configuration.

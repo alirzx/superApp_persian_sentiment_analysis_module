@@ -81,3 +81,23 @@ Do not create an empty placeholder manifest or delete the cache using
 CPU PyTorch/ONNX export dependencies, temporary disk space and sufficient RAM.
 If setup cannot reach the model Hub, no application startup is attempted.
 The original GitLab CI script is deliberately unchanged by this incident fix.
+
+
+## Installing packages reliably and exposing the UI on trusted LAN/VPN (Nov 2026)
+
+The Python API and one-shot model-builder use Liara PyPI with Chabokan fallback, explicit retries and timeouts, and isolated pip configuration. PyTorch's CPU-only wheel is fetched separately from its official CPU wheel repository with no dependencies; its normal dependencies are resolved via Liara/Chabokan. Frontend npm packages use the Liara npm mirror, and the Nginx Alpine image installs `gettext` using Liara's Alpine mirror. This avoids *configuring* original PyPI/npm/Alpine as dependency indexes, but upstream redirects and Docker base-image registries remain potential network dependencies. A strictly internal build requires a vetted private wheelhouse and container registry.
+
+Server `ENV_FILE` needs `UI_BIND_IP=0.0.0.0`, `UI_PORT=8083` if clients use both LAN and VPN interface addresses. Restrict inbound TCP 8083 to the trusted LAN/VPN clients. Keep `API_BIND_IP=127.0.0.1` and `API_PORT=8002`. The UI injects a shared service token and has no human login, so a private firewall/VPN is a minimum prerequisite, not a substitute for user authentication where needed.
+
+```bash
+docker compose config --quiet
+docker compose config --format json | python3 -c 'import json,sys;d=json.load(sys.stdin);print({x:d["services"][x].get("ports") for x in ("api","ui")})'
+docker compose up --build -d
+docker compose ps -a
+docker compose logs --tail=150 model-setup api ui
+docker compose port ui 8080
+curl -fsS http://127.0.0.1:8002/health/ready
+curl -fsS http://<server-lan-or-vpn-ip>:8083/healthz
+```
+
+The organization-owned GitLab deploy job is unchanged. It currently copies the CI File variable `ENV_FILE`, performs `git pull origin master`, then runs `docker compose up --build -d`. Earlier sections describing a manual `RUN_SERVICES` gate describe a previous pipeline and must not be relied upon for the current company job.

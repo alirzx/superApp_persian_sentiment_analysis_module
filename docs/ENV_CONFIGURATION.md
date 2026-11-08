@@ -47,7 +47,7 @@ those `main` values with the exact SHA values from the installed
 | `API_TOKEN` | empty | privately generated | Shared `X-API-Key` secret for service-to-service access |
 | `API_BIND_IP` | `127.0.0.1` | `127.0.0.1` | API host bind; do not use 0.0.0.0 without secured ingress |
 | `API_PORT` | `8001` | `8002` | Host port to internal API :8000 |
-| `UI_BIND_IP` | `127.0.0.1` | `127.0.0.1` | UI host bind |
+| `UI_BIND_IP` | `127.0.0.1` | `0.0.0.0` (LAN/VPN, restricted firewall) | UI host bind |
 | `UI_PORT` | `8082` | `8083` | Host port to internal Nginx :8080 |
 | `PIP_PRIMARY_INDEX_URL` | Liara mirror | Liara mirror | Python package build index |
 | `PIP_FALLBACK_INDEX_URL` | Chabokan mirror | Chabokan mirror | Fallback package build index |
@@ -102,3 +102,14 @@ Model `main` revisions must be pinned and CPU quality/performance tested before
 production approval. The one-shot setup first requires network access to the
 PyTorch CPU wheel, dependency indexes, and Hugging Face. The long-running API
 needs only the verified offline model volume.
+
+
+## November 2026 build mirror and LAN/VPN update
+
+- API Python dependencies are installed using the **Liara PyPI** mirror; **Chabokan PyPI** is the fallback. Each install uses explicit `--index-url`, `--isolated`, retry and timeout controls. No original PyPI index is configured. Note: the mirror may still return a package file link or redirect to an external host; inspect build logs if strict egress isolation is required.
+- `model-setup` obtains the **single CPU PyTorch wheel** from PyTorch's official CPU repository using `pip download --no-deps`. It then installs that local wheel and its transitive dependencies from Liara or Chabokan, without using the PyTorch index to resolve dependencies. Model checkpoints still download from Hugging Face.
+- React npm packages are installed using Liara's **npm** registry (`NPM_REGISTRY_URL`); Alpine `gettext` uses Liara's **Alpine** mirror. Python mirrors cannot serve npm/APK packages.
+- `PIP_TIMEOUT_SECONDS=90`, `PIP_RETRIES=4`, `HF_HUB_ETAG_TIMEOUT=30`, `HF_HUB_DOWNLOAD_TIMEOUT=120` are configurable starting points.
+- To expose UI to clients connecting through **both LAN and VPN** interfaces, the sample production `.env` uses `UI_BIND_IP=0.0.0.0`, `UI_PORT=8083`; the API remains on `127.0.0.1:8002`. This listens on all server IPv4 interfaces: use restrictive firewall rules and authenticated HTTPS ingress, or bind to `192.168.4.209` if VPN clients route to the LAN address. The actual server `.env` is provided through GitLab's `ENV_FILE` and overrides the example.
+- `docker compose up --build -d` does not by itself prove HTTP readiness. Check `docker compose ps -a`, `docker compose logs --tail=100 ui` and `curl http://<server-lan-or-vpn-ip>:8083/healthz`. The UI now has its own HTTP healthcheck.
+- Company-owned `.gitlab-ci.yml` is not modified by these changes; its active deployment workflow currently copies `ENV_FILE`, pulls `origin/master`, and executes `docker compose up --build -d`.

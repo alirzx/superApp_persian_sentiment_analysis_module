@@ -24,7 +24,7 @@ def test_local_and_server_port_contract():
     assert local['APP_ENV'] == 'development'
     assert prod['APP_ENV'] == 'production'
     assert prod['API_TOKEN'] == ''  # must fail closed until operator supplies one
-    assert (prod['API_BIND_IP'], prod['UI_BIND_IP']) == ('127.0.0.1', '127.0.0.1')
+    assert (prod['API_BIND_IP'], prod['UI_BIND_IP']) == ('127.0.0.1', '0.0.0.0')
 
 
 def test_gitlab_deployment_single_source_and_path():
@@ -59,3 +59,33 @@ def test_compose_bootstraps_models_before_api():
     assert 'restart: "no"' in setup
     assert 'model_cache:/models:ro' in api
     assert 'model_cache:/models' in setup
+
+
+def test_builds_use_configured_package_mirrors_and_network_timeout():
+    api = (ROOT / 'backend/Dockerfile').read_text(encoding='utf-8')
+    setup = (ROOT / 'backend/Dockerfile.setup').read_text(encoding='utf-8')
+    front = (ROOT / 'frontend/Dockerfile').read_text(encoding='utf-8')
+    compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
+    for source in (api, setup):
+        assert '--isolated install' in source
+        assert '--index-url "$PIP_PRIMARY_INDEX_URL"' in source
+        assert '--index-url "$PIP_FALLBACK_INDEX_URL"' in source
+        assert '--timeout "$PIP_TIMEOUT_SECONDS"' in source
+        assert '--retries "$PIP_RETRIES"' in source
+        assert '--extra-index-url' not in source.split('RUN', 1)[-1]
+    assert '--no-deps' in setup and 'download.pytorch.org/whl/cpu' in setup
+    assert '--registry="$NPM_REGISTRY_URL"' in front
+    assert 'linux-mirror.liara.ir/repository/alpine/' in front
+    assert 'NPM_REGISTRY_URL:' in compose
+    assert 'HF_HUB_DOWNLOAD_TIMEOUT:' in compose
+
+
+def test_production_ui_reachable_on_lan_and_vpn_with_loopback_api():
+    prod = _env('.env.production.example')
+    assert prod['UI_BIND_IP'] == '0.0.0.0'
+    assert prod['UI_PORT'] == '8083'
+    assert prod['API_BIND_IP'] == '127.0.0.1'
+    compose = (ROOT / 'docker-compose.yml').read_text(encoding='utf-8')
+    assert '${UI_BIND_IP:-127.0.0.1}' in compose
+    assert 'healthcheck:' in compose
+    assert '/healthz' in compose
